@@ -1,0 +1,10 @@
+# Secret
+.env
+.env.local
+.env.production
+.env.staging
+.ssh
+
+# Personal 
+
+relai-rdp.sh
