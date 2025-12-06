@@ -8,7 +8,6 @@
 # TODO: ajouter vscodium flatpak/non-flatpak
 
 # Configuration
-# Configuration
 DESKTOP_FILES=(
     "/var/lib/flatpak/exports/share/applications/com.visualstudio.code.desktop"
     "/usr/share/applications/code.desktop"
