@@ -305,19 +305,58 @@ configure_ethernet_interface() {
 
 # Configuration du routage et NAT
 configure_routing() {
-    log "Configuration du routage et NAT..."
+    log "Configuration du routage, NAT et MSS Clamping (Mode Prioritaire)..."
     
+    # Activation IP Forwarding
     echo 1 > /proc/sys/net/ipv4/ip_forward
     
-    iptables -t nat -D POSTROUTING -o "$INET_INTERFACE" -j MASQUERADE 2>/dev/null || true
-    iptables -D FORWARD -i "$INET_INTERFACE" -o "$SHARED_INTERFACE" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
-    iptables -D FORWARD -i "$SHARED_INTERFACE" -o "$INET_INTERFACE" -j ACCEPT 2>/dev/null || true
+    # Désactivation du Reverse Path Filtering (Souvent nécessaire pour les VPNs/Routage asymétrique)
+    # Si activé (1 ou 2), le kernel peut jeter les paquets qui ne semblent pas "logiques"
+    log "Désactivation du rp_filter pour supporter le VPN..."
+    sysctl -w net.ipv4.conf.all.rp_filter=0 >/dev/null 2>&1 || true
+    sysctl -w net.ipv4.conf.default.rp_filter=0 >/dev/null 2>&1 || true
+    for dev in /proc/sys/net/ipv4/conf/*/rp_filter; do
+        echo 0 > "$dev" 2>/dev/null || true
+    done
     
-    iptables -t nat -A POSTROUTING -o "$INET_INTERFACE" -j MASQUERADE
-    iptables -A FORWARD -i "$INET_INTERFACE" -o "$SHARED_INTERFACE" -m state --state RELATED,ESTABLISHED -j ACCEPT
-    iptables -A FORWARD -i "$SHARED_INTERFACE" -o "$INET_INTERFACE" -j ACCEPT
+    # Nettoyage préventif complet (Global, Legacy, Mangle)
+    iptables -t nat -D POSTROUTING ! -o "$SHARED_INTERFACE" -j MASQUERADE 2>/dev/null || true
+    iptables -D FORWARD -o "$SHARED_INTERFACE" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
+    iptables -D FORWARD -i "$SHARED_INTERFACE" -j ACCEPT 2>/dev/null || true
+    iptables -t mangle -D FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
     
-    log "Routage configuré entre $SHARED_INTERFACE ($SHARED_NETWORK) et $INET_INTERFACE"
+    if [[ -n "$INET_INTERFACE" ]]; then
+        iptables -t nat -D POSTROUTING -o "$INET_INTERFACE" -j MASQUERADE 2>/dev/null || true
+        iptables -D FORWARD -i "$INET_INTERFACE" -o "$SHARED_INTERFACE" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
+        iptables -D FORWARD -i "$SHARED_INTERFACE" -o "$INET_INTERFACE" -j ACCEPT 2>/dev/null || true
+    fi
+    
+    # 1. MSS Clamping (Table Mangle)
+    iptables -t mangle -I FORWARD 1 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+    
+    # 2. NAT Catch-All & EXPLICITE VPN (Table NAT)
+    # Règle générique
+    iptables -t nat -I POSTROUTING 1 ! -o "$SHARED_INTERFACE" -j MASQUERADE
+    # Force explicite pour cscotun0 (si présent)
+    if ip link show cscotun0 >/dev/null 2>&1; then
+        log "Ajout de règles explicites pour cscotun0..."
+        iptables -t nat -I POSTROUTING 1 -o cscotun0 -j MASQUERADE
+        iptables -I FORWARD 1 -o cscotun0 -j ACCEPT
+        iptables -I FORWARD 1 -i cscotun0 -j ACCEPT
+    fi
+    
+    # 3. Règles de Filtrage (Table Filter) - ACCEPTATION INCONDITIONNELLE DU PARTAGE
+    # On autorise tout ce qui vient de l'interface partagée (LAN -> WAN)
+    iptables -I FORWARD 1 -i "$SHARED_INTERFACE" -j ACCEPT
+    # On autorise tout ce qui va vers l'interface partagée (WAN -> LAN)
+    iptables -I FORWARD 1 -o "$SHARED_INTERFACE" -j ACCEPT
+    
+    # 4. Autorisation spécifique de l'IP cible (Ceux-ci devraient être couverts par le global, mais on force)
+    iptables -I FORWARD 1 -d 10.38.8.129 -j ACCEPT
+    iptables -I FORWARD 1 -s 10.38.8.129 -j ACCEPT
+    
+    log "Règles iptables appliquées (Global + Explicite VPN + Cible 10.38.X.X)."
+    log "MSS Clamping activé."
 }
 
 # Démarrage de dnsmasq
@@ -353,9 +392,23 @@ cleanup_configuration() {
     
     pkill dnsmasq 2>/dev/null || true
     
-    iptables -t nat -D POSTROUTING -o "$INET_INTERFACE" -j MASQUERADE 2>/dev/null || true
-    iptables -D FORWARD -i "$INET_INTERFACE" -o "$SHARED_INTERFACE" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
-    iptables -D FORWARD -i "$SHARED_INTERFACE" -o "$INET_INTERFACE" -j ACCEPT 2>/dev/null || true
+    # Nettoyage des règles globales et spécifiques
+    iptables -t nat -D POSTROUTING ! -o "$SHARED_INTERFACE" -j MASQUERADE 2>/dev/null || true
+    iptables -t nat -D POSTROUTING -o cscotun0 -j MASQUERADE 2>/dev/null || true
+    iptables -D FORWARD -o cscotun0 -j ACCEPT 2>/dev/null || true
+    iptables -D FORWARD -i cscotun0 -j ACCEPT 2>/dev/null || true
+    iptables -D FORWARD -o "$SHARED_INTERFACE" -j ACCEPT 2>/dev/null || true
+    iptables -D FORWARD -i "$SHARED_INTERFACE" -j ACCEPT 2>/dev/null || true
+    iptables -D FORWARD -o "$SHARED_INTERFACE" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
+    iptables -D FORWARD -d 10.38.8.129 -j ACCEPT 2>/dev/null || true
+    iptables -D FORWARD -s 10.38.8.129 -j ACCEPT 2>/dev/null || true
+    iptables -t mangle -D FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
+    # Nettoyage legacy
+    if [[ -n "$INET_INTERFACE" ]]; then
+        iptables -t nat -D POSTROUTING -o "$INET_INTERFACE" -j MASQUERADE 2>/dev/null || true
+        iptables -D FORWARD -i "$INET_INTERFACE" -o "$SHARED_INTERFACE" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
+        iptables -D FORWARD -i "$SHARED_INTERFACE" -o "$INET_INTERFACE" -j ACCEPT 2>/dev/null || true
+    fi
     
     nmcli device set "$SHARED_INTERFACE" managed yes 2>/dev/null || true
     ip addr flush dev "$SHARED_INTERFACE" 2>/dev/null || true
@@ -504,8 +557,27 @@ main() {
     trap signal_handler INT TERM
     
     log "=== CONFIGURATION DU PARTAGE ==="
-    log "Interface partagée: $SHARED_INTERFACE"
-    log "Interface Internet: $INET_INTERFACE"
+    log "Interface Ethernet Partagée (LAN): $SHARED_INTERFACE"
+    
+    # Détection et affichage de TOUTES les interfaces potentielles de sortie
+    log "Interfaces Internet/VPN détectées (Upstream):"
+    
+    # Liste toutes les interfaces sauf lo et l'interface partagée
+    for iface in $(ip -o link show | awk -F': ' '{print $2}' | grep -v "lo" | grep -v "$SHARED_INTERFACE"); do
+        # Vérifier si l'interface a une IP
+        if ip addr show "$iface" | grep -q "inet"; then
+            local desc=""
+            # Vérifier si c'est la route par défaut
+            if [[ "$iface" == "$INET_INTERFACE" ]]; then
+                desc="(Route par défaut)"
+            fi
+            # Vérifier si c'est un VPN (souvent tun/tap/csco)
+            if [[ "$iface" == *"tun"* || "$iface" == *"tap"* || "$iface" == *"csco"* ]]; then
+                desc="$desc (VPN/Tunnel)"
+            fi
+            log "  - $iface $desc"
+        fi
+    done
     log "Réseau: $SHARED_NETWORK"
     log "IP du routeur: $SHARED_IP"
     log "Plage DHCP: $DHCP_RANGE_START - $DHCP_RANGE_END"
@@ -520,6 +592,31 @@ main() {
     configure_ethernet_interface
     configure_routing
     start_dnsmasq
+    
+    # Debug DIAGNOSTIC AUTOMATIQUE AVANCÉ
+    log "=== DIAGNOSTIC CONNECTIVITÉ AVANCÉ ==="
+    log "Route vers 10.38.8.129 :"
+    ip route get 10.38.8.129 | while read line; do log "  $line"; done
+    
+    log "--- TABLE NAT (POSTROUTING) ---"
+    iptables -t nat -S POSTROUTING | while read line; do log "  $line"; done
+    
+    log "--- TABLE MANGLE (FORWARD & POSTROUTING) - CRITIQUE POUR VPN ---"
+    iptables -t mangle -S FORWARD | while read line; do log "  $line"; done
+    iptables -t mangle -S POSTROUTING | while read line; do log "  $line"; done
+    
+    log "--- CHAÎNE ciscovpnfinal (Si existe) ---"
+    iptables -S ciscovpnfinal 2>/dev/null | while read line; do log "  $line"; done
+    
+    log "--- TABLE FILTER (FORWARD - Détail) ---"
+    iptables -S FORWARD | while read line; do log "  $line"; done
+
+    log "--- ÉTAT ACTUALISÉ ip_forward & rp_filter ---"
+    log "ip_forward: $(cat /proc/sys/net/ipv4/ip_forward)"
+    log "rp_filter (cscotun0): $(cat /proc/sys/net/ipv4/conf/cscotun0/rp_filter 2>/dev/null || echo 'N/A')"
+    log "rp_filter (all): $(cat /proc/sys/net/ipv4/conf/all/rp_filter)"
+    
+    log "=============================="
     
     # Démarrer la capture si activée
     if [[ "${NO_CAPTURE:-false}" != "true" ]]; then
