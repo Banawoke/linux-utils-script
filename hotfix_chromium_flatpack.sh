@@ -7,6 +7,12 @@
 # résoud le problème des icone non persistante
 # Version tout-en-un
 
+# TODO : ajoute la copie du script dans /usr/local/bin
+#SCRIPT_DIR="/usr/local/bin"
+#SCRIPT_NAME="hotfix_chromium_flatpack.sh"
+#SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_NAME"
+
+
 # Configuration
 SYSTEM_DESKTOP_FILE="/var/lib/flatpak/exports/share/applications/org.chromium.Chromium.desktop"
 SYSTEMD_SERVICE_NAME="chromium-persistence.service"
