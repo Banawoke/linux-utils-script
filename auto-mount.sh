@@ -61,7 +61,7 @@ parse_hosts() {
 }
 
 locate_inventory_file() {
-    find "$search_dir" -type f -iname "*inventory*.yaml" -print -quit
+    find "$search_dir" -maxdepth 6 -type f -iname "*inventory*.yaml" -print -quit
 }
 # Fonction pour créer le point de montage et monter le /home distant
 mount_remote_home() {
