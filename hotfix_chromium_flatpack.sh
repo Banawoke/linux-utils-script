@@ -7,10 +7,10 @@
 # résoud le problème des icone non persistante
 # Version tout-en-un
 
-# TODO : ajoute la copie du script dans /usr/local/bin
-#SCRIPT_DIR="/usr/local/bin"
-#SCRIPT_NAME="hotfix_chromium_flatpack.sh"
-#SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_NAME"
+# Configuration des chemins
+SCRIPT_DIR="/usr/local/bin"
+SCRIPT_NAME="hotfix_chromium_flatpack.sh"
+SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_NAME"
 
 
 # Configuration
@@ -56,7 +56,7 @@ Wants=graphical-session.target
 
 [Service]
 Type=oneshot
-ExecStart=$SCRIPT_EXEC
+ExecStart=$SCRIPT_PATH
 RemainAfterExit=yes
 User=root
 
@@ -318,6 +318,32 @@ install_system() {
     if [[ ! -f "$SYSTEM_DESKTOP_FILE" ]]; then
         echo "Erreur: Le fichier $SYSTEM_DESKTOP_FILE n'existe pas"
         echo "Assurez-vous que Chromium Flatpak est installé"
+        exit 1
+    fi
+
+    # Étape 1: Créer le répertoire du script si nécessaire
+    if [[ ! -d "$SCRIPT_DIR" ]]; then
+        echo "Création du répertoire $SCRIPT_DIR"
+        mkdir -p "$SCRIPT_DIR"
+    fi
+    
+    # Étape 2: Copier le script courant vers le répertoire de destination
+    # On vérifie si on n'est pas déjà en train d'exécuter depuis le bon endroit
+    if [[ "$(readlink -f "$0")" != "$SCRIPT_PATH" ]]; then
+        echo "Installation du script vers $SCRIPT_PATH"
+        cp "$0" "$SCRIPT_PATH"
+    else
+        echo "Le script est déjà exécuté depuis l'emplacement final: $SCRIPT_PATH"
+    fi
+    
+    # Définir les permissions appropriées
+    if [[ -f "$SCRIPT_PATH" ]]; then
+        echo "Le script est déployé ici $SCRIPT_PATH"
+        chmod 755 "$SCRIPT_PATH"
+        chown root:root "$SCRIPT_PATH"
+        echo "Permissions définies pour le script: 755 root:root"
+    else
+        echo "Erreur: Le script n'a pas pu être copié vers $SCRIPT_PATH"
         exit 1
     fi
     
