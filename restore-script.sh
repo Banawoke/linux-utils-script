@@ -1,8 +1,37 @@
 #!/bin/bash
 
+# Restauration depuis archive tar.gz
+echo "Restauration depuis archive tar.gz"
+echo "Recherche d'archives tar.gz dans /mnt..."
+
+TARBALL=$(find /mnt -maxdepth 2 -name "*.tar.gz" -type f 2>/dev/null | head -n 1)
+
+if [ -n "$TARBALL" ]; then
+    echo "Archive trouvée : $TARBALL"
+    echo "Contenu de l'archive (premiers éléments) :"
+    tar -tzf "$TARBALL" | head -n 20
+    echo ""
+    read -r -p "Voulez-vous extraire cette archive à la racine / ? (o/N) : " CONFIRM
+    
+    if [[ "$CONFIRM" =~ ^[oOyY]$ ]]; then
+        echo "Extraction de l'archive vers / ..."
+        sudo tar -xzf "$TARBALL" -C / --preserve-permissions
+        if [ $? -eq 0 ]; then
+            echo "Extraction terminée avec succès."
+        else
+            echo "Erreur lors de l'extraction de l'archive."
+        fi
+    else
+        echo "Extraction annulée."
+    fi
+else
+    echo "Aucune archive tar.gz trouvée dans /mnt"
+fi
+
+echo ""
+
 # Demande interactive pour le fichier APT
 # Cette liste peut être obtenue avec : apt-mark showmanual > "/opt/apt-list.txt"
-
 echo "--- Restauration APT ---"
 read -r -p "Veuillez indiquer le chemin du fichier liste APT (Entrée pour ignorer) : " APT_LIST
 
