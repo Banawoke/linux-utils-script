@@ -1,5 +1,10 @@
 #!/bin/bash
 
+if ! command -v sudo &> /dev/null; then
+    echo "sudo n'est pas installé sur ce système."
+    exit 1
+fi
+
 # Restauration depuis archive tar.gz
 echo "Restauration depuis archive tar.gz"
 echo "Recherche d'archives tar.gz dans /mnt..."
@@ -9,7 +14,7 @@ TARBALL=$(find /mnt -maxdepth 2 -name "*.tar.gz" -type f 2>/dev/null | head -n 1
 if [ -n "$TARBALL" ]; then
     echo "Archive trouvée : $TARBALL"
     echo "Contenu de l'archive (premiers éléments) :"
-    tar -tzf "$TARBALL" | head -n 20
+    tar -tzf "$TARBALL"
     echo ""
     read -r -p "Voulez-vous extraire cette archive à la racine / ? (o/N) : " CONFIRM
     
