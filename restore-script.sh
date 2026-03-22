@@ -38,7 +38,10 @@ echo ""
 # Demande interactive pour le fichier APT
 # Cette liste peut être obtenue avec : apt-mark showmanual > "/opt/apt-list.txt"
 echo "--- Restauration APT ---"
-read -r -p "Veuillez indiquer le chemin du fichier liste APT (Entrée pour ignorer) : " APT_LIST
+APT_LIST=$(find /mnt -maxdepth 2 -name "apt-list.txt" -type f 2>/dev/null | head -n 1)
+
+if [ -z "$APT_LIST" ]; then
+read -r -p "Non trouvé veuillez indiquer le chemin du fichier liste APT (Entrée pour ignorer) : " APT_LIST
 
 if [ -n "$APT_LIST" ] && [ -f "$APT_LIST" ]; then
     echo "Liste des paquets APT trouvée : $APT_LIST"
