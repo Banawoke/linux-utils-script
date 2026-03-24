@@ -17,6 +17,8 @@ SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_NAME"
 SYSTEM_DESKTOP_FILE="/var/lib/flatpak/exports/share/applications/org.chromium.Chromium.desktop"
 SYSTEMD_SERVICE_NAME="chromium-persistence.service"
 SYSTEMD_SERVICE_FILE="/etc/systemd/system/$SYSTEMD_SERVICE_NAME"
+SYSTEMD_TIMER_NAME="chromium-persistence.timer"
+SYSTEMD_TIMER_FILE="/etc/systemd/system/$SYSTEMD_TIMER_NAME"
 MARKER_COMMENT="# Modified by chromium_persistence script"
 
 # Vérifier les privilèges root
@@ -36,8 +38,8 @@ is_already_modified() {
 
 # Fonction pour vérifier si le service systemd est déjà actif
 is_service_active() {
-    if [[ -f "$SYSTEMD_SERVICE_FILE" ]]; then
-        systemctl is-active --quiet "$SYSTEMD_SERVICE_NAME"
+    if [[ -f "$SYSTEMD_TIMER_FILE" ]]; then
+        systemctl is-active --quiet "$SYSTEMD_TIMER_NAME"
         return $?
     fi
     return 1
@@ -51,33 +53,42 @@ create_systemd_service() {
     cat > "$SYSTEMD_SERVICE_FILE" << EOF
 [Unit]
 Description=Chromium Persistence Service
-After=graphical-session.target
-Wants=graphical-session.target
 
 [Service]
 Type=oneshot
 ExecStart=$SCRIPT_PATH
 RemainAfterExit=yes
 User=root
+EOF
+
+    cat > "$SYSTEMD_TIMER_FILE" << EOF
+[Unit]
+Description=Timer for Chromium Persistence Service
+
+[Timer]
+OnBootSec=1min
+Unit=$SYSTEMD_SERVICE_NAME
 
 [Install]
-WantedBy=default.target
+WantedBy=timers.target
 EOF
 }
 
 # Fonction pour activer le service systemd
 enable_systemd_service() {
     systemctl daemon-reload
-    systemctl enable "$SYSTEMD_SERVICE_NAME"
-    echo "Service systemd créé et activé: $SYSTEMD_SERVICE_FILE"
+    systemctl enable --now "$SYSTEMD_TIMER_NAME"
+    echo "Timer systemd créé et activé: $SYSTEMD_TIMER_FILE"
 }
 
 # Fonction pour désactiver et supprimer le service systemd
 remove_systemd_service() {
+    systemctl disable --now "$SYSTEMD_TIMER_NAME" 2>/dev/null || true
     systemctl disable "$SYSTEMD_SERVICE_NAME" 2>/dev/null || true
+    rm -f "$SYSTEMD_TIMER_FILE"
     rm -f "$SYSTEMD_SERVICE_FILE"
     systemctl daemon-reload 2>/dev/null || true
-    echo "Service systemd supprimé: $SYSTEMD_SERVICE_FILE"
+    echo "Service et timer systemd supprimés: $SYSTEMD_SERVICE_FILE"
 }
 
 # --- LOGIQUE DE CORRECTION UTILISATEUR (INTEGRÉE) ---
@@ -372,15 +383,16 @@ install_system() {
     fi
 
     # Gérer le service systemd
-    if [[ -f "$SYSTEMD_SERVICE_FILE" ]]; then
+    if [[ -f "$SYSTEMD_TIMER_FILE" ]]; then
          if is_service_active; then
-            echo "Le service systemd est déjà actif."
+            echo "Le timer systemd est déjà actif."
         else
-            echo "Réactivation du service systemd..."
+            echo "Réactivation du timer systemd..."
             enable_systemd_service
         fi
     else
-        echo "Création du service systemd: $SYSTEMD_SERVICE_NAME"
+        echo "Création du timer systemd: $SYSTEMD_TIMER_NAME"
+        systemctl disable "$SYSTEMD_SERVICE_NAME" 2>/dev/null || true
         create_systemd_service
         enable_systemd_service
     fi
@@ -463,12 +475,12 @@ show_status() {
     fi
 
     # Vérifier le service systemd
-    if [[ -f "$SYSTEMD_SERVICE_FILE" ]]; then
-        echo "Service systemd: INSTALLÉ"
-        systemctl is-active --quiet "$SYSTEMD_SERVICE_NAME" && echo "  État: ACTIF" || echo "  État: INACTIF"
-        systemctl is-enabled --quiet "$SYSTEMD_SERVICE_NAME" && echo "  Boot: ACTIVÉ" || echo "  Boot: DÉSACTIVÉ"
+    if [[ -f "$SYSTEMD_TIMER_FILE" ]]; then
+        echo "Timer systemd: INSTALLÉ"
+        systemctl is-active --quiet "$SYSTEMD_TIMER_NAME" && echo "  État: ACTIF" || echo "  État: INACTIF"
+        systemctl is-enabled --quiet "$SYSTEMD_TIMER_NAME" && echo "  Boot: ACTIVÉ" || echo "  Boot: DÉSACTIVÉ"
     else
-        echo "Service systemd: NON INSTALLÉ"
+        echo "Timer systemd: NON INSTALLÉ"
     fi
 }
 
