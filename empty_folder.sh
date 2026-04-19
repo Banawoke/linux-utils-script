@@ -18,7 +18,7 @@ show_help() {
     echo "  -t              Déplacer dans un dossier 'other/' tous les fichiers"
     echo "                  dont l'extension n'est PAS dans la liste des formats"
     echo "                  conservés (.docx, .pptx, .xlsx, .md, .conf, .cfg,"
-    echo "                  .html, .pp, .yaml, .yml, .txt, .pdf)"
+    echo "                  .html, .pp, .yaml, .yml, .txt, .pdf etc..)"
     echo ""
     echo "Exemple:"
     echo "  $0 /home/user/dossier_test"
@@ -174,7 +174,7 @@ if [ "$TRI_OTHER" = true ]; then
     echo "Phase 4: Déplacement des fichiers non reconnus dans le dossier 'other/'..."
 
     # Extensions à GARDER à la racine
-    KEEP_EXTENSIONS=("docx" "pptx" "xlsx" "md" "conf" "cfg" "html" "pp" "yaml" "yml" "txt" "pdf")
+    KEEP_EXTENSIONS=("docx" "doc" "pptx" "ppt" "xlsx" "xls" "odt" "odp" "ods" "md" "conf" "cfg" "html" "pp" "yaml" "yml" "txt" "pdf" "csv" "rtf" "jpg" "jpeg" "png" "gif" "bmp" "svg" "webp" "heic" "tif" "tiff" "ico" "mp4" "avi" "mkv" "mov" "wmv" "webm" "mp3" "wav" "flac" "aac" "ogg" "m4a" "json" "xml")
     OTHER_DIR="$TARGET_PATH/other"
     files_sorted=0
 
