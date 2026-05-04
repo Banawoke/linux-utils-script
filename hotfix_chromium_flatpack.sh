@@ -138,11 +138,7 @@ process_user_fixes() {
              sed -i "/^Exec=.*org\.chromium\.Chromium/ s/ '--enable-features=AcceleratedVideoDecodeLinuxGL'//g" "$file"
              sed -i '/^Exec=.*org\.chromium\.Chromium/ s/ --enable-features=AcceleratedVideoDecodeLinuxGL//g' "$file"
              
-             # Étape B: Ajouter le flag juste après org.chromium.Chromium, avant les paramètres
-             # URL et les portails Flatpak @@u ... @@ pour ne pas les casser.
-             #
-             # Cas 1 — arguments entre guillemets simples (fichiers webapp générés par Chromium) :
-             #   'org.chromium.Chromium'  -->  'org.chromium.Chromium' '--enable-features=...'
+        
              sed -i "/^Exec=.*'org\.chromium\.Chromium'/ s/'org\.chromium\.Chromium'/'org.chromium.Chromium' '--enable-features=AcceleratedVideoDecodeLinuxGL'/" "$file"
              #
              # Cas 2 — arguments sans guillemets (fichier système, si le flag n'est pas encore présent) :
