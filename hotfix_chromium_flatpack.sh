@@ -131,15 +131,22 @@ process_user_fixes() {
         
         # 2. Corriger les lignes Exec=
         if grep -q "^Exec=.*org\.chromium\.Chromium" "$file"; then
-             # Stratégie idempotente : on retire tout flag existant, puis on en remet un seul à la fin.
-             # Cela gère les doublons, les manquants, et les fichiers multi-actions (Exec multiples).
+             # Stratégie idempotente : on retire tout flag existant, puis on en remet un seul.
+             # Gère les doublons, les manquants et les fichiers multi-actions (Exec multiples).
              
-             # Étape A: Supprimer toutes les occurrences du flag sur les lignes Exec
+             # Étape A: Supprimer toutes les occurrences du flag (forme sans et avec guillemets)
+             sed -i "/^Exec=.*org\.chromium\.Chromium/ s/ '--enable-features=AcceleratedVideoDecodeLinuxGL'//g" "$file"
              sed -i '/^Exec=.*org\.chromium\.Chromium/ s/ --enable-features=AcceleratedVideoDecodeLinuxGL//g' "$file"
              
-             # Étape B: Ajouter le flag juste après org.chromium.Chromium (avant les paramètres
-             # URL et les portails Flatpak @@u ... @@ pour ne pas les casser)
-             sed -i '/^Exec=.*org\.chromium\.Chromium/ s/org\.chromium\.Chromium/org.chromium.Chromium --enable-features=AcceleratedVideoDecodeLinuxGL/' "$file"
+             # Étape B: Ajouter le flag juste après org.chromium.Chromium, avant les paramètres
+             # URL et les portails Flatpak @@u ... @@ pour ne pas les casser.
+             #
+             # Cas 1 — arguments entre guillemets simples (fichiers webapp générés par Chromium) :
+             #   'org.chromium.Chromium'  -->  'org.chromium.Chromium' '--enable-features=...'
+             sed -i "/^Exec=.*'org\.chromium\.Chromium'/ s/'org\.chromium\.Chromium'/'org.chromium.Chromium' '--enable-features=AcceleratedVideoDecodeLinuxGL'/" "$file"
+             #
+             # Cas 2 — arguments sans guillemets (fichier système, si le flag n'est pas encore présent) :
+             sed -i "/^Exec=.*org\.chromium\.Chromium/{/AcceleratedVideoDecodeLinuxGL/!s/org\.chromium\.Chromium/org.chromium.Chromium --enable-features=AcceleratedVideoDecodeLinuxGL/}" "$file"
         fi
         
         # Calculer le hash après
@@ -176,7 +183,8 @@ process_user_revert() {
         fi
         
         if grep -q "AcceleratedVideoDecodeLinuxGL" "$file"; then
-             # Suppression du flag
+             # Suppression du flag (forme avec et sans guillemets simples)
+             sed -i "s/ '--enable-features=AcceleratedVideoDecodeLinuxGL'//g" "$file"
              sed -i 's/ --enable-features=AcceleratedVideoDecodeLinuxGL//g' "$file"
              files_reverted=$((files_reverted + 1))
         fi
