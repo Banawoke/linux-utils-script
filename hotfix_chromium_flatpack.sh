@@ -137,8 +137,9 @@ process_user_fixes() {
              # Étape A: Supprimer toutes les occurrences du flag sur les lignes Exec
              sed -i '/^Exec=.*org\.chromium\.Chromium/ s/ --enable-features=AcceleratedVideoDecodeLinuxGL//g' "$file"
              
-             # Étape B: Ajouter le flag à la fin de toutes les lignes Exec
-             sed -i '/^Exec=.*org\.chromium\.Chromium/ s/$/ --enable-features=AcceleratedVideoDecodeLinuxGL/' "$file"
+             # Étape B: Ajouter le flag juste après org.chromium.Chromium (avant les paramètres
+             # URL et les portails Flatpak @@u ... @@ pour ne pas les casser)
+             sed -i '/^Exec=.*org\.chromium\.Chromium/ s/org\.chromium\.Chromium/org.chromium.Chromium --enable-features=AcceleratedVideoDecodeLinuxGL/' "$file"
         fi
         
         # Calculer le hash après
@@ -280,10 +281,20 @@ modify_desktop_file() {
                     exec_content=$(echo "$exec_content" | sed 's|org\.chromium\.Chromium|org.chromium.Chromium --enable-features=AcceleratedVideoDecodeLinuxGL|')
                 fi
 
-                # FIX: Suppression de "@@u %U @@" qui perturbe la detection de fenetre Gnome
+                # FIX: Suppression de "@@u %U @@" / "@@u %u @@" qui perturbe la détection de fenêtre Gnome
                 if [[ "$exec_content" =~ "@@u %U @@" ]]; then
                     echo "[$(date)] Nettoyage de @@u %U @@ -> %U" >&2
                     exec_content=${exec_content//@@u %U @@/%U}
+                elif [[ "$exec_content" =~ "@@u %u @@" ]]; then
+                    echo "[$(date)] Nettoyage de @@u %u @@ -> %U" >&2
+                    exec_content=${exec_content//@@u %u @@/%U}
+                fi
+                
+                # FIX: S'assurer que %U est présent — sans lui, xdg-open ne transmet pas l'URL
+                # à l'instance Chromium existante, ce qui force l'ouverture d'une nouvelle fenêtre
+                if [[ ! "$exec_content" =~ %[Uu] ]]; then
+                    echo "[$(date)] Ajout de %U manquant (nécessaire pour ouvrir les liens dans la fenêtre existante)" >&2
+                    exec_content="$exec_content %U"
                 fi
                 
                 echo "Exec=$exec_content" >> "$temp_file"
