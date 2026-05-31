@@ -499,27 +499,53 @@ show_status() {
     fi
 }
 
+# Fonction d'aide
+show_help() {
+    echo "Usage: $0 [action]"
+    echo ""
+    echo "Script de persistance pour modifier Chromium Flatpak et activer l'accélération GPU."
+    echo "Modifie le fichier .desktop système et installe un timer systemd pour maintenir la modification."
+    echo ""
+    echo "Actions:"
+    echo "  install      Installe le service et modifie le fichier .desktop (Action par défaut)"
+    echo "  uninstall    Désinstalle le service et restaure le fichier .desktop original"
+    echo "  status       Affiche l'état d'installation du système de persistance"
+    echo "  run-fixes    Lance manuellement les corrections pour tous les utilisateurs locaux"
+    echo ""
+    echo "Options:"
+    echo "  -h, --help   Afficher cette aide"
+    echo ""
+    echo "Exemple:"
+    echo "  $0 install"
+    echo "  $0 status"
+    echo "  $0 -h"
+}
+
+# Analyse des options
+if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
+    show_help
+    exit 0
+fi
+
 # Menu principal
-case "${1:-install}" in
-    "install")
+action="${1:-install}"
+case "$action" in
+    install)
         install_system
         ;;
-    "uninstall")
+    uninstall)
         uninstall_system
         ;;
-    "status")
+    status)
         show_status
         ;;
-    "run-fixes")
+    run-fixes)
         run_fixes_all_users
         ;;
     *)
-        echo "Usage: $0 [install|uninstall|status|run-fixes]"
+        echo "Erreur: Action '$action' non reconnue."
         echo ""
-        echo "  install   - Installe le service et modifie le fichier desktop"
-        echo "  uninstall - Désinstalle et restaure"
-        echo "  status    - Affiche l'état"
-        echo "  run-fixes - Lance manuellement les corrections utilisateurs"
+        show_help
         exit 1
         ;;
 esac
