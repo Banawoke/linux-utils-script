@@ -262,9 +262,49 @@ show_connections() {
     arp -a | grep -E "$(echo $SHARED_NETWORK | cut -d'/' -f1 | sed 's/\.[0-9]*$//')" 2>/dev/null || echo "Aucune entrée ARP trouvée"
 }
 
+# Fonction pour créer le script de logging DHCP
+create_dhcp_logger() {
+    local logger_path="/usr/local/bin/dhcp-event-logger.sh"
+    log "Création/Vérification du script de logging DHCP ($logger_path)..."
+    
+    cat > "$logger_path" << 'EOF'
+#!/bin/bash
+# Script de journalisation des événements DHCP de dnsmasq
+# Généré automatiquement par share_ethernet_port.sh
+
+ACTION="$1"
+MAC="$2"
+IP="$3"
+HOSTNAME="${4:-<inconnu>}"
+
+CONNECTIONS_LOG="/tmp/ethernet_connections.log"
+
+case "$ACTION" in
+    add)
+        MSG="CONNEXION: MAC=$MAC, IP=$IP, Nom=$HOSTNAME"
+        ;;
+    del)
+        MSG="DÉCONNEXION: MAC=$MAC, IP=$IP, Nom=$HOSTNAME"
+        ;;
+    old)
+        MSG="RENOUVELLEMENT: MAC=$MAC, IP=$IP, Nom=$HOSTNAME"
+        ;;
+    *)
+        MSG="ÉVÉNEMENT DHCP INCONNU ($ACTION): MAC=$MAC, IP=$IP, Nom=$HOSTNAME"
+        ;;
+esac
+
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] $MSG" >> "$CONNECTIONS_LOG"
+EOF
+
+    chmod +x "$logger_path"
+    log "Script de logging DHCP configuré avec succès"
+}
+
 # Configuration de dnsmasq (avec logs détaillés)
 configure_dnsmasq() {
     log "Configuration de dnsmasq..."
+    create_dhcp_logger
     
     if [[ -z "$DNS_SERVERS" ]]; then
         DNS_SERVERS=$(detect_dns_servers)
@@ -362,6 +402,7 @@ cleanup_configuration() {
     ip addr flush dev "$SHARED_INTERFACE" 2>/dev/null || true
     
     [[ -f "$DNSMASQ_CONFIG_FILE" ]] && rm -f "$DNSMASQ_CONFIG_FILE"
+    rm -f /usr/local/bin/dhcp-event-logger.sh
     
     CLEANUP_DONE=true
     log "Nettoyage terminé"
