@@ -123,15 +123,23 @@ main() {
     echo "Destination: ${BACKUP_FILE}"
     echo "Cela peut prendre beaucoup de temps selon la taille de vos données..."
     
-    if tar -czpvf "${BACKUP_FILE}" \
+    set +e
+    tar -czpvf "${BACKUP_FILE}" \
         "${EXCLUDE_OPTS[@]}" \
         --exclude="${BACKUP_FILE}" \
+        --warning=no-file-changed \
+        --warning=no-file-removed \
         --ignore-failed-read \
-        / 2>&1 | tee /tmp/backup-${BACKUP_DATE}.log; then
-        
+        / 2>&1 | tee /tmp/backup-${BACKUP_DATE}.log
+    TAR_EXIT="${PIPESTATUS[0]}"
+    set -e
+
+    if [[ ${TAR_EXIT} -eq 0 ]]; then
         echo "Archive créée avec succès!"
+    elif [[ ${TAR_EXIT} -eq 1 ]]; then
+        echo "Archive créée avec succès (certains fichiers en cours d'utilisation ont été modifiés/supprimés pendant la lecture)."
     else
-        echo "Erreur lors de la création de l'archive"
+        echo "Erreur fatale lors de la création de l'archive (code retour tar: ${TAR_EXIT})"
         exit 1
     fi
     
