@@ -38,10 +38,11 @@ echo ""
 # Demande interactive pour le fichier APT
 # Cette liste peut être obtenue avec : apt-mark showmanual > "/opt/apt-list.txt"
 echo "--- Restauration APT ---"
-APT_LIST=$(find /mnt -maxdepth 2 -name "apt-list.txt" -type f 2>/dev/null | head -n 1)
+APT_LIST=$(find /opt -maxdepth 2 -name "apt-list.txt" -type f 2>/dev/null | head -n 1)
 
 if [ -z "$APT_LIST" ]; then
-read -r -p "Non trouvé veuillez indiquer le chemin du fichier liste APT (Entrée pour ignorer) : " APT_LIST
+    read -r -p "Non trouvé, veuillez indiquer le chemin du fichier liste APT (Entrée pour ignorer) : " APT_LIST
+fi
 
 if [ -n "$APT_LIST" ] && [ -f "$APT_LIST" ]; then
     echo "Liste des paquets APT trouvée : $APT_LIST"
@@ -94,11 +95,16 @@ else
     fi
 fi
 
+echo ""
 
 # Demande interactive pour le fichier Flatpak
 # Cette liste peut être obtenue avec : flatpak list --columns=application --app > "/opt/flatpak-list.txt"
 echo "--- Restauration Flatpak ---"
-read -r -p "Veuillez indiquer le chemin du fichier liste Flatpak (Entrée pour ignorer) : " FLATPAK_LIST
+FLATPAK_LIST=$(find /opt -maxdepth 2 -name "flatpak-list.txt" -type f 2>/dev/null | head -n 1)
+
+if [ -z "$FLATPAK_LIST" ]; then
+    read -r -p "Non trouvé, veuillez indiquer le chemin du fichier liste Flatpak (Entrée pour ignorer) : " FLATPAK_LIST
+fi
 
 if [ -n "$FLATPAK_LIST" ] && [ -f "$FLATPAK_LIST" ]; then
     echo "Liste des applications Flatpak trouvée : $FLATPAK_LIST"
