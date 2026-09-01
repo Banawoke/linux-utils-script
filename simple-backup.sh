@@ -10,8 +10,7 @@ fi
 
 # Configuration
 BACKUP_DATE=$(date +%Y-%m-%d_%H-%M-%S)
-BACKUP_DIR="/mnt/backup"
-BACKUP_FILE="${BACKUP_DIR}/system-backup-${BACKUP_DATE}.tar.gz"
+DEFAULT_BACKUP_DIR="/mnt/backup"
 
 # Dossiers à exclure
 EXCLUDE_DIRS=(
@@ -47,10 +46,24 @@ main() {
     echo "=== Démarrage de la sauvegarde système ==="
     echo "Date: ${BACKUP_DATE}"
     
+    # Demande de l'emplacement de sauvegarde
+    if [[ $# -ge 1 && -n "${1:-}" ]]; then
+        BACKUP_DIR="$1"
+    else
+        read -r -p "Emplacement de la sauvegarde [défaut: ${DEFAULT_BACKUP_DIR}] : " input_dir
+        BACKUP_DIR="${input_dir:-${DEFAULT_BACKUP_DIR}}"
+    fi
+
+    # Gestion de l'expansion du tilde (~) si exécuté avec sudo
+    if [[ "${BACKUP_DIR}" == "~"* ]]; then
+        USER_HOME=$(getent passwd "${SUDO_USER:-$USER}" | cut -d: -f6)
+        BACKUP_DIR="${BACKUP_DIR/#\~/${USER_HOME}}"
+    fi
+
     # Vérifier/créer le dossier de destination
     if [[ ! -d "${BACKUP_DIR}" ]]; then
         echo "Le dossier ${BACKUP_DIR} n'existe pas"
-        read -p "Voulez-vous le créer? (o/N): " create_dir
+        read -r -p "Voulez-vous le créer? (o/N): " create_dir
         if [[ "${create_dir}" =~ ^[oO]$ ]]; then
             mkdir -p "${BACKUP_DIR}"
             echo "Dossier ${BACKUP_DIR} créé"
@@ -59,6 +72,9 @@ main() {
             exit 1
         fi
     fi
+
+    BACKUP_DIR=$(realpath "${BACKUP_DIR}")
+    BACKUP_FILE="${BACKUP_DIR}/system-backup-${BACKUP_DATE}.tar.gz"
     
     # Vérifier l'espace disque disponible
     echo "Vérification de l'espace disque..."
@@ -67,7 +83,7 @@ main() {
     
     if [[ ${AVAILABLE_SPACE} -lt 10 ]]; then
         echo "Espace disque faible (< 10G)"
-        read -p "Continuer quand même? (o/N): " continue_backup
+        read -r -p "Continuer quand même? (o/N): " continue_backup
         if [[ ! "${continue_backup}" =~ ^[oO]$ ]]; then
             echo "Sauvegarde annulée"
             exit 0
@@ -79,12 +95,15 @@ main() {
     for dir in "${EXCLUDE_DIRS[@]}"; do
         EXCLUDE_OPTS+=(--exclude="${dir}")
     done
+    # Exclure le dossier de destination
+    EXCLUDE_OPTS+=(--exclude="${BACKUP_DIR}")
     
     # Afficher les exclusions
     echo "Dossiers exclus de la sauvegarde:"
     for dir in "${EXCLUDE_DIRS[@]}"; do
         echo "  - ${dir}"
     done
+    echo "  - ${BACKUP_DIR} (dossier de destination)"
     
     # Sauvegarde des paquets
     echo "Sauvegarde des listes de paquets et d'applications..."
@@ -96,13 +115,12 @@ main() {
     fi
 
     if [ -d "/etc/apt/sources.list.d" ]; then
-        cat /etc/apt/sources.list.d/* > "/opt/repo-fallback.txt"
+        cat /etc/apt/sources.list.d/* > "/opt/repo-fallback.txt" 2>/dev/null || true
     fi
 
-
-    
     # Créer l'archive
     echo "Création de l'archive en cours..."
+    echo "Destination: ${BACKUP_FILE}"
     echo "Cela peut prendre beaucoup de temps selon la taille de vos données..."
     
     if tar -czpvf "${BACKUP_FILE}" \
@@ -125,7 +143,7 @@ main() {
     echo "Log: /tmp/backup-${BACKUP_DATE}.log"
     
     # Vérifier l'intégrité de l'archive
-    read -p "Voulez-vous vérifier l'intégrité de l'archive? (o/N): " verify
+    read -r -p "Voulez-vous vérifier l'intégrité de l'archive? (o/N): " verify
     if [[ "${verify}" =~ ^[oO]$ ]]; then
         echo "Vérification de l'archive..."
         if tar -tzf "${BACKUP_FILE}" > /dev/null 2>&1; then
@@ -140,4 +158,4 @@ main() {
 }
 
 # Exécution
-main
+main "$@"
