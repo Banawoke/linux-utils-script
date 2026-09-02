@@ -13,9 +13,6 @@ TARBALL=$(find /mnt -maxdepth 2 -name "*.tar.gz" -type f 2>/dev/null | head -n 1
 
 if [ -n "$TARBALL" ]; then
     echo "Archive trouvée : $TARBALL"
-    echo "Contenu de l'archive (premiers éléments) :"
-    tar -tzf "$TARBALL"
-    echo ""
     read -r -p "Voulez-vous extraire cette archive à la racine / ? (o/N) : " CONFIRM
     
     if [[ "$CONFIRM" =~ ^[oOyY]$ ]]; then
