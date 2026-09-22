@@ -1,7 +1,3 @@
-.env
-.env.local
-.env.production
-.env.staging
-.ssh
+.*
 relai-rdp.sh
 log*
