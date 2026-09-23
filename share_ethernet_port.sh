@@ -23,6 +23,7 @@ DNS_SERVERS=""  # Sera automatiquement détecté
 CLEANUP_DONE=false
 TSHARK_PID=""  # PID du processus tshark
 CAPTURE_ENABLED=false
+BRIDGE_MASTER=""  # Bridge dont l'interface était membre (pour restauration)
 
 # Fonction de logging avec timestamp
 log() {
@@ -199,8 +200,8 @@ detect_internet_interface() {
     if [[ -n "$interface" ]]; then
         echo "$interface"
     else
-        echo "ERREUR: Impossible de détecter l'interface Internet"
-        exit 1
+        echo "ERREUR: Impossible de détecter l'interface Internet" >&2
+        return 1
     fi
 }
 
@@ -336,6 +337,13 @@ configure_ethernet_interface() {
     log "Configuration de l'interface Ethernet $SHARED_INTERFACE..."
     log "Réseau: $SHARED_NETWORK, IP du routeur: $SHARED_IP"
     
+    # Détacher l'interface d'un éventuel bridge (sinon dnsmasq ne voit pas les requêtes DHCP)
+    BRIDGE_MASTER=$(ip link show "$SHARED_INTERFACE" 2>/dev/null | grep -oP 'master \K\w+' || true)
+    if [[ -n "$BRIDGE_MASTER" ]]; then
+        log "Détachement de $SHARED_INTERFACE du bridge $BRIDGE_MASTER..."
+        ip link set "$SHARED_INTERFACE" nomaster
+    fi
+    
     nmcli device set "$SHARED_INTERFACE" managed no 2>/dev/null || true
     ip addr flush dev "$SHARED_INTERFACE" 2>/dev/null || true
     ip addr add "$SHARED_IP/$SUBNET_MASK" dev "$SHARED_INTERFACE"
@@ -400,6 +408,12 @@ cleanup_configuration() {
     
     nmcli device set "$SHARED_INTERFACE" managed yes 2>/dev/null || true
     ip addr flush dev "$SHARED_INTERFACE" 2>/dev/null || true
+    
+    # Re-attacher l'interface au bridge si elle en faisait partie
+    if [[ -n "$BRIDGE_MASTER" ]]; then
+        log "Re-attachement de $SHARED_INTERFACE au bridge $BRIDGE_MASTER..."
+        ip link set "$SHARED_INTERFACE" master "$BRIDGE_MASTER" 2>/dev/null || true
+    fi
     
     [[ -f "$DNSMASQ_CONFIG_FILE" ]] && rm -f "$DNSMASQ_CONFIG_FILE"
     rm -f /usr/local/bin/dhcp-event-logger.sh
@@ -535,7 +549,9 @@ main() {
     fi
     
     if [[ -z "$INET_INTERFACE" ]]; then
-        INET_INTERFACE=$(detect_internet_interface)
+        if ! INET_INTERFACE=$(detect_internet_interface); then
+            exit 1
+        fi
         log "Interface Internet détectée automatiquement: $INET_INTERFACE"
     fi
     
